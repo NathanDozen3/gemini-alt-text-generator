@@ -16,22 +16,22 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Adds settings to media settings page.
  */
 function gemini_alt_text_media_settings() {
-    add_settings_section(
-        'gemini_alt_text_section',
-        'Gemini Alt Text Settings',
-        'gemini_alt_text_section_callback',
-        'media'
-    );
+	add_settings_section(
+		'gemini_alt_text_section',
+		__( 'Gemini Alt Text Settings', 'gemini-alt-text-generator' ),
+		'gemini_alt_text_section_callback',
+		'media'
+	);
 
-    add_settings_field(
-        'gemini_alt_text_media_api_key',
-        'Gemini API Key',
-        'gemini_alt_text_api_key_field_callback',
-        'media',
-        'gemini_alt_text_section'
-    );
+	add_settings_field(
+		'gemini_alt_text_media_api_key',
+		__( 'Gemini API Key', 'gemini-alt-text-generator' ),
+		'gemini_alt_text_api_key_field_callback',
+		'media',
+		'gemini_alt_text_section'
+	);
 
-    register_setting( 'media', 'gemini_alt_text_media_api_key' );
+	register_setting( 'media', 'gemini_alt_text_media_api_key' );
 }
 add_action( 'admin_init', 'gemini_alt_text_media_settings' );
 
@@ -39,17 +39,17 @@ add_action( 'admin_init', 'gemini_alt_text_media_settings' );
  * Section callback.
  */
 function gemini_alt_text_section_callback() {
-    echo '<p>Enter your Gemini API key to enable alt text generation.</p>';
+	echo '<p>' . esc_html__( 'Enter your Gemini API key to enable alt text generation.', 'gemini-alt-text-generator' ) . '</p>';
 }
 
 /**
  * API key field callback.
  */
 function gemini_alt_text_api_key_field_callback() {
-    $api_key = get_option( 'gemini_alt_text_media_api_key', '' );
-    ?>
-    <input type="text" name="gemini_alt_text_media_api_key" value="<?php echo esc_attr( $api_key ); ?>" class="regular-text" />
-    <?php
+	$api_key = get_option( 'gemini_alt_text_media_api_key', '' );
+	?>
+	<input type="text" name="gemini_alt_text_media_api_key" value="<?php echo esc_attr( $api_key ); ?>" class="regular-text" />
+	<?php
 }
 
 /**
@@ -58,7 +58,7 @@ function gemini_alt_text_api_key_field_callback() {
  * @return string API key.
  */
 function gemini_get_api_key() {
-    return get_option( 'gemini_alt_text_media_api_key', '' );
+	return get_option( 'gemini_alt_text_media_api_key', '' );
 }
 
 /**
@@ -66,7 +66,7 @@ function gemini_get_api_key() {
  *
  * @param int $attachment_id Attachment ID.
  */
-function gemini_generate_alt_text($attachment_id) {
+function gemini_generate_alt_text( $attachment_id ) {
 	$api_key = gemini_get_api_key();
 
 	if ( empty( $api_key ) ) {
@@ -87,35 +87,43 @@ function gemini_generate_alt_text($attachment_id) {
 		try {
 			$response = wp_remote_post(
 				'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $api_key,
-				[
-					'headers' => [
+				array(
+					'headers' => array(
 						'Content-Type' => 'application/json',
-					],
-					'body' => json_encode([
-						'contents' => [
-							[
-								'parts' => [
-									[
-										'text' => 'Describe the following image for use as alt text. Return just the text to be used in the alt attribute.',
-									],
-									[
-										'inlineData' => [
-											'mimeType' => 'image/jpeg',
-											'data' => base64_encode( file_get_contents( $image_url, false, stream_context_create(
-												array(
-													'ssl' => array(
-														'verify_peer'      => false,
-														'verify_peer_name' => false,
-													),
-												)
-											) ) ),
-										],
-									],
-								],
-							],
-						],
-					]),
-				]
+					),
+					'body'    => wp_json_encode(
+						array(
+							'contents' => array(
+								array(
+									'parts' => array(
+										array(
+											'text' => 'Describe the following image for use as alt text. Return just the text to be used in the alt attribute.',
+										),
+										array(
+											'inlineData' => array(
+												'mimeType' => 'image/jpeg',
+												'data'     => base64_encode(
+													file_get_contents(
+														$image_url,
+														false,
+														stream_context_create(
+															array(
+																'ssl' => array(
+																	'verify_peer'      => false,
+																	'verify_peer_name' => false,
+																),
+															)
+														)
+													)
+												),
+											),
+										),
+									),
+								),
+							),
+						)
+					),
+				)
 			);
 
 			if ( is_wp_error( $response ) ) {
@@ -127,7 +135,7 @@ function gemini_generate_alt_text($attachment_id) {
 			$data = json_decode( $body, true );
 
 			if ( isset( $data['candidates'][0]['content']['parts'][0]['text'] ) ) {
-				$new_alt_text = sanitize_text_field($data['candidates'][0]['content']['parts'][0]['text']);
+				$new_alt_text = sanitize_text_field( $data['candidates'][0]['content']['parts'][0]['text'] );
 				update_post_meta( $attachment_id, '_wp_attachment_image_alt', $new_alt_text );
 			} else {
 				error_log( 'Gemini API response format unexpected.' );
@@ -143,7 +151,7 @@ function gemini_generate_alt_text($attachment_id) {
  *
  * @param int $attachment_id Attachment ID.
  */
-function gemini_process_attachment( $attachment_id ) {	
+function gemini_process_attachment( $attachment_id ) {
 	if ( class_exists( 'ActionScheduler' ) ) {
 		as_enqueue_async_action( 'gemini_generate_alt_text_action', array( $attachment_id ), 'gemini' );
 	} else {
@@ -169,24 +177,24 @@ add_action( 'gemini_generate_alt_text_action', 'gemini_generate_alt_text_action'
  * @param array  $data   Data array.
  */
 function wp_async_task( $action, $data = array() ) {
-    $url = add_query_arg(
-        array(
-            'action'       => 'wp_async_task',
-            'async-action' => $action,
-            'async-data'   => base64_encode( serialize( $data ) ),
-        ),
-        site_url( 'wp-admin/admin-ajax.php' )
-    );
-    error_log( 'wp_async_task URL: ' . $url );
+	$url = add_query_arg(
+		array(
+			'action'       => 'wp_async_task',
+			'async-action' => $action,
+			'async-data'   => base64_encode( serialize( $data ) ),
+		),
+		site_url( 'wp-admin/admin-ajax.php' )
+	);
+	error_log( 'wp_async_task URL: ' . $url );
 
-    $args = array(
-        'timeout'   => 0,
-        'blocking'  => false,
-        'sslverify' => false, // Add this line
-    );
+	$args = array(
+		'timeout'   => 0,
+		'blocking'  => false,
+		'sslverify' => false, // Add this line
+	);
 
-    $response = wp_remote_get( $url, $args );
-    error_log( 'wp_async_task Response: ' . print_r( $response, true ) );
+	$response = wp_remote_get( $url, $args );
+	error_log( 'wp_async_task Response: ' . print_r( $response, true ) );
 }
 
 /**
@@ -216,9 +224,9 @@ add_action( 'wp_ajax_nopriv_wp_async_task', 'wp_async_task_handler' );
 function gemini_alt_text_add_button( $form_fields, $post ) {
 	$screen = get_current_screen();
 
-	if ( $screen && $screen->base === 'post' && $post && get_post_mime_type( $post->ID ) &&
-		strpos( get_post_mime_type( $post->ID ), 'image/' ) === 0 ) {
-		echo '<button type="button" id="gemini-generate-alt-button" class="button">Generate Alt Text (Gemini)</button>';
+	if ( $screen && 'post' === $screen->base && $post && get_post_mime_type( $post->ID ) &&
+		0 === strpos( get_post_mime_type( $post->ID ), 'image/' ) ) {
+		echo '<button type="button" id="gemini-generate-alt-button" class="button">' . esc_html__( 'Generate Alt Text (Gemini)', 'gemini-alt-text-generator' ) . '</button>';
 	}
 	return $form_fields;
 }
@@ -230,7 +238,7 @@ add_filter( 'attachment_fields_to_edit', 'gemini_alt_text_add_button', 10, 2 );
 function gemini_alt_text_enqueue_scripts() {
 	global $post;
 	if ( $post && get_post_mime_type( $post->ID ) &&
-		strpos( get_post_mime_type( $post->ID ), 'image/' ) === 0 ) {
+		0 === strpos( get_post_mime_type( $post->ID ), 'image/' ) ) {
 		wp_enqueue_script( 'gemini-alt-text-script', plugin_dir_url( __FILE__ ) . 'gemini-alt-text-generator.js', array( 'jquery' ), '1.0', true );
 		wp_localize_script(
 			'gemini-alt-text-script',
@@ -260,9 +268,9 @@ add_action( 'wp_ajax_gemini_alt_text_generate', 'gemini_alt_text_generate_ajax' 
 function gemini_alt_text_add_button_upload_screen() {
 	if ( isset( $_GET['item'] ) ) {
 		$attachment_id = intval( $_GET['item'] );
-		$attachment = get_post( $attachment_id );
+		$attachment    = get_post( $attachment_id );
 		if ( $attachment && get_post_mime_type( $attachment_id ) &&
-			strpos( get_post_mime_type( $attachment_id ), 'image/' ) === 0 ) {
+			0 === strpos( get_post_mime_type( $attachment_id ), 'image/' ) ) {
 			?>
 			<script type="text/javascript">
 				jQuery(document).ready(function($) {
@@ -317,21 +325,21 @@ add_action( 'admin_footer-upload.php', 'gemini_alt_text_add_button_upload_screen
  * Generates alt text for images without it.
  */
 function gemini_generate_missing_alt_text() {
-    $args = array(
-        'post_type'      => 'attachment',
-        'post_mime_type' => 'image',
-        'post_status'    => 'inherit',
-        'posts_per_page' => -1, // Get all images
-    );
+	$args = array(
+		'post_type'      => 'attachment',
+		'post_mime_type' => 'image',
+		'post_status'    => 'inherit',
+		'posts_per_page' => -1, // Get all images.
+	);
 
-    $images = get_posts( $args );
+	$images = get_posts( $args );
 
-    foreach ( $images as $image ) {
-        $alt_text = get_post_meta( $image->ID, '_wp_attachment_image_alt', true );
-        if ( empty( $alt_text ) ) {
-            gemini_process_attachment( $image->ID ); // Use gemini_process_attachment()
-        }
-    }
+	foreach ( $images as $image ) {
+		$alt_text = get_post_meta( $image->ID, '_wp_attachment_image_alt', true );
+		if ( empty( $alt_text ) ) {
+			gemini_process_attachment( $image->ID ); // Use gemini_process_attachment().
+		}
+	}
 }
 
 /**
@@ -340,7 +348,7 @@ function gemini_generate_missing_alt_text() {
  * @param int $image_id The ID of the image to process.
  */
 function gemini_process_single_image_alt_text( $image_id ) {
-    gemini_generate_alt_text( $image_id );
+	gemini_generate_alt_text( $image_id );
 }
 add_action( 'gemini_process_single_image_alt_text', 'gemini_process_single_image_alt_text', 10, 1 );
 
@@ -348,20 +356,20 @@ add_action( 'gemini_process_single_image_alt_text', 'gemini_process_single_image
  * Adds a button to trigger alt text generation to Media settings.
  */
 function gemini_add_alt_text_generation_button_to_media_settings() {
-    add_settings_section(
-        'gemini_generate_alt_text_section',
-        'Generate Missing Alt Text',
-        'gemini_generate_alt_text_section_callback',
-        'media'
-    );
+	add_settings_section(
+		'gemini_generate_alt_text_section',
+		__( 'Generate Missing Alt Text', 'gemini-alt-text-generator' ),
+		'gemini_generate_alt_text_section_callback',
+		'media'
+	);
 
-    add_settings_field(
-        'gemini_generate_alt_text_button_field',
-        'Generate',
-        'gemini_generate_alt_text_button_field_callback',
-        'media',
-        'gemini_generate_alt_text_section'
-    );
+	add_settings_field(
+		'gemini_generate_alt_text_button_field',
+		__( 'Generate', 'gemini-alt-text-generator' ),
+		'gemini_generate_alt_text_button_field_callback',
+		'media',
+		'gemini_generate_alt_text_section'
+	);
 }
 add_action( 'admin_init', 'gemini_add_alt_text_generation_button_to_media_settings' );
 
@@ -369,43 +377,43 @@ add_action( 'admin_init', 'gemini_add_alt_text_generation_button_to_media_settin
  * Section callback.
  */
 function gemini_generate_alt_text_section_callback() {
-    echo '<p>Click the button below to generate alt text for all images in your media library that are missing it.</p>';
+	echo '<p>' . esc_html__( 'Click the button below to generate alt text for all images in your media library that are missing it.', 'gemini-alt-text-generator' ) . '</p>';
 }
 
 /**
  * Button field callback.
  */
 function gemini_generate_alt_text_button_field_callback() {
-    ?>
-    <button type="button" id="gemini-generate-alt-text-button" class="button button-primary">Generate Alt Text</button>
-    <div id="gemini-alt-text-progress" style="margin-top: 10px;"></div>
-    <script type="text/javascript">
-        jQuery(document).ready(function($) {
-            $('#gemini-generate-alt-text-button').on('click', function() {
-                $('#gemini-alt-text-progress').html('<span class="spinner is-active"></span> Generating alt text...');
-                $.post(ajaxurl, {
-                    action: 'gemini_generate_alt_text_ajax'
-                }, function(response) {
-                    if (response.success) {
-                        $('#gemini-alt-text-progress').html('<p>Alt text generation has been started. Please check the Action Scheduler for progress.</p>');
-                    } else {
-                        $('#gemini-alt-text-progress').html('<p>Error: ' + response.data + '</p>');
-                    }
-                }).fail(function() {
-                    $('#gemini-alt-text-progress').html('<p>An error occurred.</p>');
-                });
-            });
-        });
-    </script>
-    <?php
+	?>
+	<button type="button" id="gemini-generate-alt-text-button" class="button button-primary"><?php esc_html_e( 'Generate Alt Text', 'gemini-alt-text-generator' ); ?></button>
+	<div id="gemini-alt-text-progress" style="margin-top: 10px;"></div>
+	<script type="text/javascript">
+		jQuery(document).ready(function($) {
+			$('#gemini-generate-alt-text-button').on('click', function() {
+				$('#gemini-alt-text-progress').html('<span class="spinner is-active"></span> <?php esc_html_e( 'Generating alt text...', 'gemini-alt-text-generator' ); ?>');
+				$.post(ajaxurl, {
+					action: 'gemini_generate_alt_text_ajax'
+				}, function(response) {
+					if (response.success) {
+						$('#gemini-alt-text-progress').html('<p><?php esc_html_e( 'Alt text generation has been started. Please check the Action Scheduler for progress.', 'gemini-alt-text-generator' ); ?></p>');
+					} else {
+						$('#gemini-alt-text-progress').html('<p><?php esc_html_e( 'Error:', 'gemini-alt-text-generator' ); ?> ' + response.data + '</p>');
+					}
+				}).fail(function() {
+					$('#gemini-alt-text-progress').html('<p><?php esc_html_e( 'An error occurred.', 'gemini-alt-text-generator' ); ?></p>');
+				});
+			});
+		});
+	</script>
+	<?php
 }
 
 /**
  * AJAX handler to trigger alt text generation.
  */
 function gemini_generate_alt_text_ajax_handler() {
-    gemini_generate_missing_alt_text();
-    wp_send_json_success();
+	gemini_generate_missing_alt_text();
+	wp_send_json_success();
 }
 add_action( 'wp_ajax_gemini_generate_alt_text_ajax', 'gemini_generate_alt_text_ajax_handler' );
 add_action( 'wp_ajax_nopriv_gemini_generate_alt_text_ajax', 'gemini_generate_alt_text_ajax_handler' );
