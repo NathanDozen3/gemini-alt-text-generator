@@ -263,61 +263,90 @@ function gemini_alt_text_generate_ajax() {
 add_action( 'wp_ajax_gemini_alt_text_generate', 'gemini_alt_text_generate_ajax' );
 
 /**
- * Adds button to media edit screen on upload.php.
+ * Add button to media modal.
  */
 function gemini_alt_text_add_button_upload_screen() {
-	if ( isset( $_GET['item'] ) ) {
-		$attachment_id = intval( $_GET['item'] );
-		$attachment    = get_post( $attachment_id );
-		if ( $attachment && get_post_mime_type( $attachment_id ) &&
-			0 === strpos( get_post_mime_type( $attachment_id ), 'image/' ) ) {
-			?>
-			<script type="text/javascript">
-				jQuery(document).ready(function($) {
-					var observer = new MutationObserver(function(mutations) {
-						if ($('.attachment-details').length) {
-							var attachmentId = getAttachmentIdFromUrl();
-							var attachmentMime = $('.attachment-details').find('.thumbnail img').attr('src');
-							var altTextField = $('#attachment-details-two-column-alt-text');
-							var settingsDiv = $('.attachment-details .settings');
+	?>
+	<script type="text/javascript">
+		jQuery(document).ready(function($) {
+			function processAttachmentDetails() {
+				var attachmentId = getAttachmentIdFromUrl();
 
-							if (attachmentMime) {
-								if (altTextField.val() === '') {
-									if (!settingsDiv.find('#gemini-generate-alt-button').length) {
-										
-										settingsDiv.prepend('<span class="setting" data-setting="generate-alt-button"><label for="attachment-details-generate-alt-button" class="name">Gemini</label><button type="button" id="gemini-generate-alt-button" class="button">Generate Alt Text</button></span>');
+				console.log('Attachment ID:', attachmentId); // Debugging: Log attachment ID
 
-										$('#gemini-generate-alt-button').on('click', function() {
-											var data = {
-												'action': 'gemini_alt_text_generate',
-												'post_id': <?php echo $attachment_id; ?>
-											};
+				if (attachmentId && $('.attachment-details').length) {
+					var altTextField = $('#attachment-details-two-column-alt-text');
+					var settingsDiv = $('.attachment-details .settings');
 
-											$.post(ajaxurl, data, function(response) {
-												location.reload();
-											});
-										});
-									}
-								} else {
-									settingsDiv.find('#gemini-generate-alt-button').remove();
+					if (altTextField.val() === '') {
+						if (!settingsDiv.find('#gemini-generate-alt-button').length) {
+							settingsDiv.append('<button type="button" id="gemini-generate-alt-button" class="button">Generate Alt Text (Gemini)</button>');
+							$('#gemini-generate-alt-button').on('click', function() {
+								if (attachmentId && !isNaN(attachmentId) && typeof wp.media !== 'undefined' && typeof wp.media.attachment === 'function') {
+									console.log('AJAX request initiated for attachment ID:', attachmentId); // Debugging: Log AJAX initiation
+
+									var data = {
+										'action': 'gemini_save_alt_text', // AJAX action
+										'post_id': attachmentId
+									};
+
+									console.log('AJAX data:', data); // Debugging: Log AJAX data
+
+									$.post(ajaxurl, data, function(response) {
+										console.log('AJAX response:', response); // Debugging: Log AJAX response
+
+										if (response.success) {
+											var attachment = wp.media.attachment(attachmentId);
+											if (attachment && typeof attachment.loadDetails === 'function') {
+												attachment.loadDetails(); // Refresh modal
+											}
+											// location.reload(); // Refresh the page
+										} else {
+											console.error('Error saving alt text:', response.data);
+										}
+									});
 								}
-							}
-							observer.disconnect();
+							});
 						}
-					});
-
-					observer.observe(document.body, { childList: true, subtree: true });
-
-					// Function to extract attachment ID from URL
-					function getAttachmentIdFromUrl() {
-						var urlParams = new URLSearchParams(window.location.search);
-						return urlParams.get('item');
+					} else {
+						settingsDiv.find('#gemini-generate-alt-button').remove();
 					}
-				});
-			</script>
-			<?php
-		}
-	}
+				}
+			}
+
+			function getAttachmentIdFromUrl() {
+				var urlParams = new URLSearchParams(window.location.search);
+				return urlParams.get('item');
+			}
+
+			function checkAndProcess() {
+				if (getAttachmentIdFromUrl() && $('.attachment-details').length) {
+					processAttachmentDetails();
+				}
+			}
+
+			// Initial check on document ready
+			checkAndProcess();
+
+			// Check when modal content changes
+			var modalObserver = new MutationObserver(function(mutations) {
+				checkAndProcess();
+			});
+			modalObserver.observe($('.media-frame-content')[0], { childList: true, subtree: true });
+
+			// Check when URL changes
+			var urlObserver = new MutationObserver(function(mutations) {
+				checkAndProcess();
+			});
+			urlObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+
+			// Check when modal is opened
+			$(document).on('click', '.edit-attachment', function() {
+				setTimeout(checkAndProcess, 100);
+			});
+		});
+	</script>
+	<?php
 }
 add_action( 'admin_footer-upload.php', 'gemini_alt_text_add_button_upload_screen' );
 
@@ -417,3 +446,15 @@ function gemini_generate_alt_text_ajax_handler() {
 }
 add_action( 'wp_ajax_gemini_generate_alt_text_ajax', 'gemini_generate_alt_text_ajax_handler' );
 add_action( 'wp_ajax_nopriv_gemini_generate_alt_text_ajax', 'gemini_generate_alt_text_ajax_handler' );
+
+function gemini_save_alt_text_handler() {
+	$post_id = intval( $_POST['post_id'] );
+	if ( $post_id ) {
+		$alt_text = gemini_generate_alt_text( $post_id );
+		wp_send_json_success( array( 'alt_text' => $alt_text ) );
+	} else {
+		wp_send_json_error( 'Invalid post ID' );
+	}
+}
+add_action( 'wp_ajax_gemini_save_alt_text', 'gemini_save_alt_text_handler' );
+add_action( 'wp_ajax_nopriv_gemini_save_alt_text', 'gemini_save_alt_text_handler' );
