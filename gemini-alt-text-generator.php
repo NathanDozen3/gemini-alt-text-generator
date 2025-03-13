@@ -358,16 +358,32 @@ function gemini_generate_missing_alt_text() {
 		'post_type'      => 'attachment',
 		'post_mime_type' => 'image',
 		'post_status'    => 'inherit',
-		'posts_per_page' => -1, // Get all images.
+		'posts_per_page' => -1,
+		'meta_query'     => array(
+			'relation' => 'OR',
+			array(
+				'key'     => '_wp_attachment_image_alt',
+				'compare' => 'NOT EXISTS',
+			),
+			array(
+				'key'     => '_wp_attachment_image_alt',
+				'compare' => '=',
+				'value'   => '',
+			)
+		),
 	);
 
-	$images = get_posts( $args );
+	$query = new WP_Query($args);
 
-	foreach ( $images as $image ) {
-		$alt_text = get_post_meta( $image->ID, '_wp_attachment_image_alt', true );
-		if ( empty( $alt_text ) ) {
-			gemini_process_attachment( $image->ID ); // Use gemini_process_attachment().
+	if ($query->have_posts()) {
+		while ($query->have_posts()) {
+			$query->the_post();
+			$attachment_id = get_the_ID();
+			gemini_generate_alt_text($attachment_id);
 		}
+		wp_reset_postdata();
+	} else {
+		echo "No images without alt text found.";
 	}
 }
 
@@ -428,7 +444,8 @@ function gemini_generate_alt_text_button_field_callback() {
 					} else {
 						$('#gemini-alt-text-progress').html('<p><?php esc_html_e( 'Error:', 'gemini-alt-text-generator' ); ?> ' + response.data + '</p>');
 					}
-				}).fail(function() {
+				}).fail(function(response) {
+					console.log(response)
 					$('#gemini-alt-text-progress').html('<p><?php esc_html_e( 'An error occurred.', 'gemini-alt-text-generator' ); ?></p>');
 				});
 			});
